@@ -7,6 +7,7 @@ Perfect for building creative experiments, graphics, or image-based projects.`;
 
 export default function HeroDescription() {
   const [copied, setCopied] = useState(false);
+  console.log("🚀 ~ HeroDescription ~ copied:", copied)
 
   async function handleCopy() {
     try {
