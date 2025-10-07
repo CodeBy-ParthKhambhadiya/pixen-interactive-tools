@@ -4,20 +4,32 @@ import { useState } from "react";
 import jsPDF from "jspdf";
 
 // We'll use free translate API for demo
+// Type for a single translation segment returned by Google Translate
+type TranslationSegment = [translatedText: string, originalText: string, ...unknown[]];
+
+// Full response type
+type GoogleTranslateResponse = [segments: TranslationSegment[], ...unknown[]];
+
 async function translateText(text: string, targetLang: string): Promise<string> {
   try {
     const res = await fetch(
-      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(
-        text
-      )}`
+      `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
     );
-    const data = await res.json();
-    return data[0].map((item: any) => item[0]).join("");
-  } catch (err) {
+
+    const data: GoogleTranslateResponse = await res.json();
+
+    // Type-safe extraction
+    if (Array.isArray(data) && Array.isArray(data[0])) {
+      return data[0].map((item: TranslationSegment) => item[0]).join("");
+    }
+
+    return text; // fallback if structure is unexpected
+  } catch (err: unknown) {
     console.error("Translation error:", err);
     return text; // fallback to original if error
   }
 }
+
 
 type AnalysisResults = {
   wordCount: number;
@@ -40,40 +52,51 @@ export default function TextScanner() {
     setRawText(text);
     analyzeText(text);
   };
+const analyzeText = (text: string) => {
+  const cleanText = text.toLowerCase().trim();
 
-  const analyzeText = (text: string) => {
-    const cleanText = text.toLowerCase().trim();
+  // Count letters
+  const letters = cleanText.match(/[a-zA-Z]/g) || [];
+  const letterCount = letters.length;
 
-    // Count letters
-    const letters = cleanText.match(/[a-zA-Z]/g) || [];
-    const letterCount = letters.length;
+  // Count words
+  const words = cleanText.match(/\b\w+\b/g) || [];
+  const wordCount = words.length;
 
-    // Count words
-    const words = cleanText.match(/\b\w+\b/g) || [];
-    const wordCount = words.length;
+  // Duplicate words
+  const wordCounter: Record<string, number> = {};
+  words.forEach((word) => {
+    wordCounter[word] = (wordCounter[word] || 0) + 1;
+  });
 
-    // Duplicate words
-    const wordCounter: Record<string, number> = {};
-    words.forEach((w) => (wordCounter[w] = (wordCounter[w] || 0) + 1));
-    const duplicateWords = Object.fromEntries(
-      Object.entries(wordCounter).filter(([_, c]) => c > 1)
-    );
+  const duplicateWords: Record<string, number> = Object.fromEntries(
+    Object.entries(wordCounter).filter(([word, count]) => count > 1)
+  );
 
-    // Sentences
-    const sentences = cleanText.split(/[.!?]\s+/).filter(Boolean);
-    const sentenceCounter: Record<string, number> = {};
-    sentences.forEach((s) => (sentenceCounter[s] = (sentenceCounter[s] || 0) + 1));
-    const duplicateSentences = Object.fromEntries(
-      Object.entries(sentenceCounter).filter(([_, c]) => c > 1)
-    );
+  // Split the text into sentences
+  const sentences: string[] = cleanText.split(/[.!?]\s+/).filter(Boolean);
 
-    setResults({
-      wordCount,
-      letterCount,
-      duplicateWords,
-      duplicateSentences,
-    });
-  };
+  // Count occurrences of each sentence
+  const sentenceCounter: Record<string, number> = {};
+  sentences.forEach((sentence: string) => {
+    sentenceCounter[sentence] = (sentenceCounter[sentence] || 0) + 1;
+  });
+
+  // Get only duplicate sentences (occurrence > 1)
+  const duplicateSentences: Record<string, number> = Object.fromEntries(
+    Object.entries(sentenceCounter).filter(([sentence, count]) => count > 1)
+  );
+
+  console.log(duplicateSentences);
+
+  setResults({
+    wordCount,
+    letterCount,
+    duplicateWords,
+    duplicateSentences,
+  });
+};
+
 
   const handleSave = () => {
     analyzeText(rawText);
